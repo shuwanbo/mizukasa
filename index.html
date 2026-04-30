@@ -327,13 +327,34 @@ function parseIframeAll(html) {
       if (idx >= 0) { rateCol = idx; break; }
     }
 
-    // ヘッダーで見つからない場合：全列を評価して0〜100%の値が最も多い列を選ぶ
+    // ヘッダーで見つからない場合：「滑らかさ」で貯水率列を検出
+    // 貯水率は10分で0.1%程度しか変化しない → 変化量が最小の列を選ぶ
     if (rateCol < 0) {
-      let bestColScore = 0;
+      let bestColScore = -1;
       const maxCol = Math.max(...dataRows.map(r => r.cells.length));
-      for (let col = 3; col < Math.min(maxCol, 12); col++) {
-        const vals = dataRows.map(r => parseFloat(r.cells[col]?.textContent)).filter(v => !isNaN(v) && v >= 0 && v <= 105);
-        if (vals.length > bestColScore) { bestColScore = vals.length; rateCol = col; }
+      for (let col = 3; col < Math.min(maxCol, 15); col++) {
+        const colVals = dataRows.map(r => {
+          const v = parseFloat(r.cells[col]?.textContent);
+          return (!isNaN(v) && v >= 0 && v <= 105) ? v : null;
+        });
+        const validVals = colVals.filter(v => v !== null);
+        // 70%以上の行で有効値が必要
+        if (validVals.length < dataRows.length * 0.7) continue;
+        // 3種類以上の異なる値が必要（定数列を除外）
+        if (new Set(validVals.map(v => Math.round(v * 10))).size < 3) continue;
+        const ratio = validVals.length / dataRows.length;
+        // 連続する値の平均変化量を計算
+        let totalChange = 0, changeCount = 0, prev = null;
+        for (const v of colVals) {
+          if (v !== null) {
+            if (prev !== null) { totalChange += Math.abs(v - prev); changeCount++; }
+            prev = v;
+          }
+        }
+        const avgChange = changeCount > 0 ? totalChange / changeCount : 999;
+        // スコア：高カバレッジ + 小変化量 = 貯水率らしさ
+        const score = ratio / (1 + avgChange);
+        if (score > bestColScore) { bestColScore = score; rateCol = col; }
       }
     }
     if (rateCol < 0) rateCol = 6;
