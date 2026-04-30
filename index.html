@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Mizukasa">
+  <title>Mizukasa</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans',
+                   'Hiragino Kaku Gothic ProN', 'Yu Gothic', sans-serif;
+      background: linear-gradient(160deg, #0a1628 0%, #12336e 55%, #0b4f9e 100%);
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+      align-items: center;
+      padding: 20px 16px 48px;
+    }
+
+    .container { width: 100%; max-width: 420px; }
+
+    /* ── Header ── */
+    .header { text-align: center; margin-bottom: 14px; }
+    .header h1 {
+      font-size: 28px; font-weight: 900; color: #fff;
+      letter-spacing: 4px; text-shadow: 0 2px 16px rgba(0,80,200,.6);
+    }
+    .header .subtitle { font-size: 11px; color: rgba(255,255,255,.55); margin-top: 3px; letter-spacing: 2px; }
+
+    /* ── Tab bar ── */
+    .tab-row { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; }
+    .tab-scroll { flex: 1; display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+    .tab-scroll::-webkit-scrollbar { display: none; }
+    .tab {
+      flex-shrink: 0;
+      background: rgba(255,255,255,.15); border: 1.5px solid rgba(255,255,255,.25);
+      color: rgba(255,255,255,.7); border-radius: 20px; padding: 6px 12px 6px 14px;
+      font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap;
+      display: flex; align-items: center; gap: 5px; transition: all .2s; user-select: none;
+    }
+    .tab.active { background: rgba(255,255,255,.95); color: #0d2d5e; border-color: rgba(255,255,255,.95); }
+    .tab-close {
+      background: none; border: none; color: inherit; font-size: 15px;
+      cursor: pointer; padding: 0; line-height: 1; opacity: .5; transition: opacity .15s;
+      display: flex; align-items: center; margin-left: 1px;
+    }
+    .tab-close:hover { opacity: 1; }
+    .add-tab-btn {
+      flex-shrink: 0; width: 34px; height: 34px;
+      background: rgba(255,255,255,.18); border: 1.5px solid rgba(255,255,255,.35);
+      color: #fff; border-radius: 50%; font-size: 22px; font-weight: 200;
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      transition: background .2s; line-height: 1;
+    }
+    .add-tab-btn:hover { background: rgba(255,255,255,.3); }
+
+    /* ── Empty state ── */
+    .empty-state {
+      background: rgba(255,255,255,.97); border-radius: 24px; padding: 44px 24px;
+      text-align: center; box-shadow: 0 28px 80px rgba(0,0,0,.45);
+    }
+    .empty-icon { font-size: 52px; margin-bottom: 16px; }
+    .empty-state h2 { font-size: 18px; font-weight: 800; color: #0d2d5e; margin-bottom: 8px; }
+    .empty-state p { font-size: 13px; color: #999; line-height: 1.7; }
+
+    /* ── Card（1枚に統合） ── */
+    .card {
+      background: rgba(255,255,255,.97); border-radius: 24px;
+      padding: 22px 20px 18px; box-shadow: 0 28px 80px rgba(0,0,0,.45);
+    }
+    .card-title {
+      font-size: 13px; font-weight: 800; color: #0d2d5e;
+      letter-spacing: 1.5px; margin-bottom: 14px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .card-title::before { content: ''; width: 4px; height: 16px; background: #2196F3; border-radius: 2px; display: block; }
+
+    /* ── Status ── */
+    .status-bar { display: flex; align-items: center; gap: 7px; margin-bottom: 14px; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #4CAF50; flex-shrink: 0; animation: blink 2s infinite; }
+    .status-dot.loading { background: #FF9800; animation: blink .8s infinite; }
+    .status-dot.error   { background: #F44336; animation: none; }
+    @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+    .status-text { font-size: 11px; color: #999; }
+
+    /* ── Error ── */
+    .error-banner {
+      display: none; background: #FFF3F3; border: 1px solid #FFBDBD;
+      border-radius: 10px; padding: 10px 12px; font-size: 12px; color: #c62828;
+      margin-bottom: 14px; line-height: 1.5; white-space: pre-line;
+    }
+
+    /* ── Main value ── */
+    .main-section { text-align: center; margin-bottom: 22px; }
+    .storage-value { font-size: 68px; font-weight: 900; color: #0d2d5e; line-height: 1; letter-spacing: -2px; transition: opacity .3s; }
+    .storage-value.fading { opacity: .25; }
+    .storage-unit { font-size: 14px; color: #aaa; margin-top: 4px; }
+
+    /* ── Progress ── */
+    .progress-section { margin-bottom: 20px; }
+    .progress-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+    .progress-label { font-size: 12px; font-weight: 700; color: #555; }
+    .rate-value { font-size: 26px; font-weight: 900; transition: color .5s; }
+    .progress-track { width: 100%; height: 16px; background: #e8edf3; border-radius: 8px; overflow: hidden; }
+    .progress-fill {
+      height: 100%; border-radius: 8px; width: 0%; background: #2196F3;
+      transition: width .9s cubic-bezier(.4,0,.2,1), background-color .5s;
+      position: relative; overflow: hidden;
+    }
+    .progress-fill::after {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,.4) 50%, transparent 100%);
+      animation: shimmer 2.4s infinite;
+    }
+    @keyframes shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(200%); } }
+    .tick-row { display: flex; justify-content: space-between; margin-top: 4px; padding: 0 1px; }
+    .tick { font-size: 10px; color: #ccc; }
+
+    /* ── Info grid ── */
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-bottom: 18px; }
+    .info-item { background: #f3f7fb; border-radius: 12px; padding: 10px 12px; }
+    .info-item.wide { grid-column: 1 / -1; }
+    .info-label { font-size: 10px; color: #aaa; font-weight: 700; letter-spacing: .5px; margin-bottom: 3px; }
+    .info-value { font-size: 14px; font-weight: 700; color: #222; }
+
+    /* ── Chart（カード内に統合） ── */
+    .chart-section {
+      border-top: 1px solid #eaeef3; padding-top: 16px; margin-top: 2px;
+    }
+    .chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .chart-title {
+      font-size: 12px; font-weight: 800; color: #0d2d5e; letter-spacing: 1px;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .chart-title::before { content: ''; width: 3px; height: 13px; background: #9c27b0; border-radius: 2px; display: block; }
+    .range-row { display: flex; gap: 5px; }
+    .range-btn {
+      padding: 5px 11px; border: none; border-radius: 8px;
+      background: #f0f4f8; color: #888; font-size: 11px; font-weight: 700;
+      cursor: pointer; transition: all .2s;
+    }
+    .range-btn.active { background: #0d2d5e; color: #fff; }
+    .chart-wrap { position: relative; height: 180px; }
+    .chart-empty {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 6px; background: rgba(255,255,255,.9); border-radius: 12px;
+    }
+    .chart-empty-icon { font-size: 28px; }
+    .chart-empty-text { font-size: 12px; color: #aaa; text-align: center; line-height: 1.5; }
+
+    /* ── Footer ── */
+    .footer { border-top: 1px solid #eaeef3; padding-top: 12px; margin-top: 16px; text-align: center; display: flex; flex-direction: column; gap: 3px; }
+    .last-update { font-size: 12px; color: #888; }
+    .auto-note { font-size: 11px; color: #ccc; }
+    .countdown { font-weight: 700; color: #aaa; }
+
+    /* ━━━━━━━━━━━━  SEARCH MODAL  ━━━━━━━━━━━━ */
+    .modal { display: none; position: fixed; inset: 0; background: rgba(8,18,36,.72); backdrop-filter: blur(8px); z-index: 200; align-items: flex-end; justify-content: center; }
+    .modal.open { display: flex; }
+    .modal-sheet { width: 100%; max-width: 460px; background: #f8f9fc; border-radius: 24px 24px 0 0; padding: 0 0 32px; max-height: 90vh; display: flex; flex-direction: column; animation: slideUp .28s cubic-bezier(.4,0,.2,1); }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    .modal-handle { width: 40px; height: 4px; border-radius: 2px; background: #dde; margin: 12px auto 0; }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 10px; }
+    .modal-title { font-size: 17px; font-weight: 800; color: #0d2d5e; }
+    .modal-close { width: 30px; height: 30px; border-radius: 50%; background: #e4e8f0; border: none; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; color: #666; }
+    .search-box { margin: 0 16px 12px; display: flex; align-items: center; gap: 8px; background: #fff; border: 1.5px solid #dde3ee; border-radius: 14px; padding: 0 12px; transition: border-color .2s; }
+    .search-box:focus-within { border-color: #2196F3; }
+    .search-icon { color: #bbb; font-size: 16px; flex-shrink: 0; }
+    .search-input { flex: 1; border: none; background: none; padding: 12px 0; font-size: 15px; outline: none; color: #222; }
+    .search-clear { background: none; border: none; color: #bbb; font-size: 18px; cursor: pointer; padding: 0; display: none; line-height: 1; }
+    .search-clear.visible { display: block; }
+    .search-status { text-align: center; padding: 24px 16px; font-size: 13px; color: #999; }
+    .search-status .loading-dots::after { content: '…'; animation: dots 1.2s infinite; }
+    @keyframes dots { 0% { content: '.'; } 33% { content: '..'; } 66% { content: '...'; } 100% { content: '.'; } }
+    .search-progress { font-size: 11px; color: #bbb; margin-top: 6px; }
+    .results-scroll { flex: 1; overflow-y: auto; padding: 0 12px; }
+    .result-item { display: flex; align-items: center; justify-content: space-between; background: #fff; border-radius: 14px; padding: 12px 14px; margin-bottom: 6px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+    .result-info { flex: 1; min-width: 0; }
+    .result-name { font-size: 14px; font-weight: 700; color: #1a2a4a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .result-meta { font-size: 11px; color: #aaa; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .result-add { flex-shrink: 0; margin-left: 10px; background: #1a6bcc; color: #fff; border: none; border-radius: 10px; padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .result-add.added { background: #e4e8f0; color: #aaa; cursor: default; }
+    .manual-section { border-top: 1px solid #e8ecf0; margin-top: 6px; padding: 14px 16px 0; }
+    .manual-label { font-size: 11px; font-weight: 700; color: #aaa; letter-spacing: .5px; margin-bottom: 8px; }
+    .manual-row { display: flex; gap: 6px; }
+    .manual-id, .manual-name { flex: 1; border: 1.5px solid #dde3ee; border-radius: 10px; padding: 9px 10px; font-size: 13px; outline: none; background: #fff; }
+    .manual-add { background: #0d2d5e; color: #fff; border: none; border-radius: 10px; padding: 9px 13px; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .no-results { text-align: center; padding: 32px 16px; font-size: 13px; color: #bbb; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>Mizukasa</h1>
+    <p class="subtitle">リアルタイム ダム貯水量</p>
+  </div>
+  <div class="tab-row">
+    <div class="tab-scroll" id="tabScroll"></div>
+    <button class="add-tab-btn" id="addBtn">+</button>
+  </div>
+  <div id="mainContent"></div>
+</div>
+
+<!-- 検索モーダル -->
+<div class="modal" id="searchModal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <span class="modal-title">ダムを検索</span>
+      <button class="modal-close" id="modalClose">✕</button>
+    </div>
+    <div class="search-box">
+      <span class="search-icon">🔍</span>
+      <input class="search-input" id="searchInput" type="search" placeholder="ダム名で検索…" autocomplete="off">
+      <button class="search-clear" id="searchClear">×</button>
+    </div>
+    <div class="search-status" id="searchStatus" style="display:none">
+      <div>ダム一覧を取得中 <span class="loading-dots"></span></div>
+      <div class="search-progress" id="searchProgress"></div>
+    </div>
+    <div class="results-scroll" id="resultsScroll" style="display:none">
+      <div id="resultsList"></div>
+    </div>
+    <div class="manual-section">
+      <div class="manual-label">IDで直接追加（観測所記号）</div>
+      <div class="manual-row">
+        <input class="manual-id"   id="manualId"   type="text" placeholder="1368080150020">
+        <input class="manual-name" id="manualName" type="text" placeholder="ダム名">
+        <button class="manual-add" id="manualAdd">追加</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+const DAM_BASE    = 'https://www1.river.go.jp';
+const SEARCH_BASE = DAM_BASE + '/cgi-bin/SrchSite.exe?KOMOKU=05&SUIKEI=-1&KEN=-1&NAME=';
+const INTERVAL    = 300;
+const PROXIES = [
+  u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+  u => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`,
+  u => `https://thingproxy.freeboard.io/fetch/${u}`,
+];
+
+/* ── お気に入り ── */
+let favorites = [], activeIdx = 0;
+function loadFavorites() {
+  try { favorites = JSON.parse(localStorage.getItem('mizukasaFavs') || '[]'); } catch { favorites = []; }
+  if (!favorites.length) { favorites = [{ id: '1368080150020', name: '石手川ダム' }]; saveFavorites(); }
+}
+function saveFavorites() { localStorage.setItem('mizukasaFavs', JSON.stringify(favorites)); }
+function addFavorite(id, name) { if (favorites.some(f => f.id === id)) return false; favorites.push({ id, name }); saveFavorites(); return true; }
+function removeFavorite(idx) { if (favorites.length <= 1) return; favorites.splice(idx, 1); saveFavorites(); if (activeIdx >= favorites.length) activeIdx = favorites.length - 1; }
+
+/* ── 履歴 ── */
+const histKey = id => `mzks_hist_${id}`;
+function getHistory(id) { try { return JSON.parse(localStorage.getItem(histKey(id)) || '[]'); } catch { return []; } }
+function mergeHistory(id, pts) {
+  if (!pts.length) return pts;
+  const existing = getHistory(id);
+  // 新データの最古タイムスタンプより古い既存データのみ残す（新データで上書き）
+  const oldest = pts[0].t;
+  const kept = existing.filter(p => p.t < oldest);
+  const merged = [...kept, ...pts].sort((a, b) => a.t < b.t ? -1 : 1);
+  const trimmed = merged.slice(-1100);
+  localStorage.setItem(histKey(id), JSON.stringify(trimmed));
+  return trimmed;
+}
+
+/* ── プロキシ fetch（並列レース） ── */
+async function proxyFetch(url, ms = 12000) {
+  const controllers = PROXIES.map(() => new AbortController());
+  const tids = controllers.map((ctrl, i) => setTimeout(() => ctrl.abort(), ms));
+  try {
+    return await Promise.any(
+      PROXIES.map(async (fn, i) => {
+        try {
+          const res = await fetch(fn(url), { cache: 'no-store', signal: controllers[i].signal });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return new TextDecoder('euc-jp').decode(await res.arrayBuffer());
+        } finally { clearTimeout(tids[i]); }
+      })
+    );
+  } finally {
+    controllers.forEach(c => c.abort());
+  }
+}
+
+/* ── パース ── */
+function extractIframeSrc(html) {
+  const m = html.match(/<IFRAME[^>]+src="([^"]+)"/i);
+  return m ? (m[1].startsWith('http') ? m[1] : DAM_BASE + m[1]) : null;
+}
+function parseIframeAll(html) {
+  const fixed = html.replace(/<meta[^>]*charset[^>]*>/gi, '<meta charset="UTF-8">');
+  const doc   = new DOMParser().parseFromString(fixed, 'text/html');
+
+  let bestPts = [], bestScore = -1;
+
+  for (const table of doc.querySelectorAll('table')) {
+    // データ行（日付形式チェック付き）を収集
+    const dataRows = [];
+    for (const row of table.querySelectorAll('tr')) {
+      const cells = Array.from(row.querySelectorAll('td'));
+      if (cells.length < 4) continue;
+      const date = cells[0]?.textContent.trim();
+      if (!date || !/^\d{4}\/\d{2}\/\d{2}$/.test(date)) continue;
+      const s = parseFloat(cells[3]?.textContent.trim());
+      if (isNaN(s)) continue;
+      dataRows.push({ cells, date, time: cells[1]?.textContent.trim() || '', s });
+    }
+    if (dataRows.length < 5) continue;
+
+    // ヘッダーから貯水率列を検出
+    let rateCol = -1;
+    for (const hrow of table.querySelectorAll('tr')) {
+      const ths = Array.from(hrow.querySelectorAll('th,td'));
+      const idx = ths.findIndex(th => th.textContent.includes('貯水率'));
+      if (idx >= 0) { rateCol = idx; break; }
+    }
+
+    // ヘッダーで見つからない場合：全列を評価して0〜100%の値が最も多い列を選ぶ
+    if (rateCol < 0) {
+      let bestColScore = 0;
+      const maxCol = Math.max(...dataRows.map(r => r.cells.length));
+      for (let col = 3; col < Math.min(maxCol, 12); col++) {
+        const vals = dataRows.map(r => parseFloat(r.cells[col]?.textContent)).filter(v => !isNaN(v) && v >= 0 && v <= 105);
+        if (vals.length > bestColScore) { bestColScore = vals.length; rateCol = col; }
+      }
+    }
+    if (rateCol < 0) rateCol = 6;
+
+    // データ生成
+    const pts = dataRows.map(({ date, time, s, cells }) => {
+      const rRaw = cells[rateCol]?.textContent.trim() ?? '';
+      const rNum = parseFloat(rRaw);
+      return { t: date + ' ' + time, s, r: (!isNaN(rNum) && rNum >= 0 && rNum <= 105) ? rNum : null };
+    });
+
+    // スコア = 行数 × (r有効率+0.1)
+    const rValid = pts.filter(p => p.r !== null).length;
+    const score = pts.length * (rValid / pts.length + 0.1);
+    if (score > bestScore) { bestScore = score; bestPts = pts; }
+  }
+
+  return bestPts.sort((a, b) => a.t < b.t ? -1 : 1);
+}
+
+/* ── ダム一覧 ── */
+let damListCache = null;
+function parseSrchPage(html) {
+  const fixed = html.replace(/<meta[^>]*charset[^>]*>/gi, '<meta charset="UTF-8">');
+  const doc   = new DOMParser().parseFromString(fixed, 'text/html');
+  const dams  = [];
+  for (const a of doc.querySelectorAll('a[href]')) {
+    const m = a.getAttribute('href').match(/SiteDetail1\('(\d+)'\)/i);
+    const name = a.textContent.trim();
+    if (!m || !name || name.length < 2) continue;
+    dams.push({ id: m[1], name, addr: a.closest('td')?.nextElementSibling?.textContent.trim() ?? '' });
+  }
+  return dams;
+}
+async function fetchAllDams(onProgress) {
+  if (damListCache) return damListCache;
+  const p0 = await proxyFetch(SEARCH_BASE + '&PAGE=0');
+  const d0 = parseSrchPage(p0);
+  const total = parseInt((p0.match(/全部で(\d+)件/) || [])[1] || '0');
+  const pages = total > 0 ? Math.ceil(total / (d0.length || 11)) : 1;
+  onProgress(d0.length, total);
+  const rest = await Promise.allSettled(
+    Array.from({ length: pages - 1 }, (_, i) => i + 1)
+      .map(p => proxyFetch(SEARCH_BASE + `&PAGE=${p}`).then(h => { const d = parseSrchPage(h); onProgress(d0.length + d.length, total); return d; }))
+  );
+  const all = [...d0, ...rest.flatMap(r => r.status === 'fulfilled' ? r.value : [])];
+  const seen = new Set();
+  damListCache = all.filter(d => { if (seen.has(d.id)) return false; seen.add(d.id); return true; });
+  return damListCache;
+}
+
+/* ── カラー ── */
+function barColor(r) { return r < 30 ? '#2196F3' : r < 60 ? '#4CAF50' : r < 80 ? '#FF9800' : '#F44336'; }
+
+/* ── グラフ ── */
+let chartInst = null, currentRange = '24h';
+function parseT(str) { const [d, t] = str.split(' '); const [y,mo,dd] = d.split('/'); const [h,mi] = t.split(':'); return new Date(+y,+mo-1,+dd,+h,+mi); }
+function filterByRange(history, range) {
+  const now = new Date(), cut = new Date(now);
+  if      (range === '24h') cut.setHours(cut.getHours() - 24);
+  else if (range === '3d')  cut.setDate(cut.getDate() - 3);
+  else                      cut.setDate(cut.getDate() - 7);
+  return history.filter(p => parseT(p.t) >= cut);
+}
+function downsample(arr, max) {
+  if (arr.length <= max) return arr;
+  const step = Math.ceil(arr.length / max);
+  return arr.filter((_, i) => i % step === 0 || i === arr.length - 1);
+}
+function initChart(canvas) {
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+  chartInst = new Chart(canvas, {
+    type: 'line',
+    data: { labels: [], datasets: [{ data: [], borderWidth: 2, pointRadius: 0, pointHoverRadius: 5, fill: true, tension: 0.3 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { intersect: false, mode: 'index' },
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor: 'rgba(13,45,94,.9)', titleColor: '#aad', bodyColor: '#fff', padding: 10, cornerRadius: 10,
+          callbacks: { label: ctx => `貯水率: ${ctx.raw !== null ? ctx.raw.toFixed(1) : '---'}%` } }
+      },
+      scales: {
+        x: { ticks: { maxRotation: 0, maxTicksLimit: 6, color: '#bbb', font: { size: 10 } }, grid: { display: false }, border: { display: false } },
+        y: { min: 0, max: 100, ticks: { stepSize: 25, color: '#bbb', font: { size: 10 }, callback: v => v + '%' }, grid: { color: 'rgba(0,0,0,.05)' }, border: { display: false } }
+      },
+      animation: { duration: 300 }
+    }
+  });
+  return chartInst;
+}
+function renderChart(damId) {
+  const canvas = document.getElementById('chartCanvas');
+  const empty  = document.getElementById('chartEmpty');
+  if (!canvas || !window.Chart) return;
+  const pts = downsample(filterByRange(getHistory(damId), currentRange), 150);
+  if (pts.length < 2) { if (empty) empty.style.display = 'flex'; return; }
+  if (empty) empty.style.display = 'none';
+  const chart = chartInst || initChart(canvas);
+  const labels = pts.map(p => { const d = parseT(p.t); const hh = String(d.getHours()).padStart(2,'0'), mm = String(d.getMinutes()).padStart(2,'0'); return currentRange === '24h' ? `${hh}:${mm}` : `${d.getMonth()+1}/${d.getDate()} ${hh}:${mm}`; });
+  const data  = pts.map(p => (p.r !== null && !isNaN(p.r)) ? p.r : null);
+  const valid = data.filter(v => v !== null);
+  const avg   = valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : 50;
+  const color = barColor(avg);
+  chart.data.labels = labels;
+  chart.data.datasets[0].data = data;
+  chart.data.datasets[0].borderColor = color;
+  chart.data.datasets[0].backgroundColor = color + '22';
+  chart.update('none');
+}
+
+/* ── UI ── */
+function setStatus(state, msg) { const dot = document.getElementById('statusDot'), text = document.getElementById('statusText'); if (!dot||!text) return; dot.className = 'status-dot'+(state?' '+state:''); text.textContent = msg; }
+function showError(msg) { const el = document.getElementById('errorBanner'); if (el) { el.textContent = msg; el.style.display = 'block'; } }
+function hideError()    { const el = document.getElementById('errorBanner'); if (el) el.style.display = 'none'; }
+function updateUI(pt) {
+  const sv = document.getElementById('storageValue'), rv = document.getElementById('rateValue'), pf = document.getElementById('progressFill'), ot = document.getElementById('obsTime'), lu = document.getElementById('lastUpdate');
+  if (sv) sv.textContent = (pt.s / 10).toLocaleString('ja-JP', { maximumFractionDigits: 1 });
+  if (pt.r !== null && !isNaN(pt.r) && rv && pf) { const c = barColor(pt.r); rv.textContent = pt.r.toFixed(1)+'%'; rv.style.color = c; pf.style.width = Math.min(pt.r,100)+'%'; pf.style.backgroundColor = c; }
+  if (ot && pt.t) ot.textContent = pt.t;
+  if (lu) lu.textContent = '最終更新: ' + new Date().toLocaleTimeString('ja-JP');
+}
+
+/* ── テンプレート ── */
+function cardHTML(dam) {
+  return `
+    <div class="card">
+      <div class="card-title">${dam.name}</div>
+      <div class="status-bar">
+        <div class="status-dot loading" id="statusDot"></div>
+        <span class="status-text" id="statusText">データを取得中…</span>
+      </div>
+      <div class="error-banner" id="errorBanner"></div>
+      <div class="main-section">
+        <div class="storage-value" id="storageValue">---</div>
+        <div class="storage-unit">万m³</div>
+      </div>
+      <div class="progress-section">
+        <div class="progress-header">
+          <span class="progress-label">貯水率</span>
+          <span class="rate-value" id="rateValue">---%</span>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="tick-row">
+          <span class="tick">0%</span><span class="tick">25%</span><span class="tick">50%</span><span class="tick">75%</span><span class="tick">100%</span>
+        </div>
+      </div>
+      <div class="info-grid">
+        <div class="info-item wide"><div class="info-label">観測日時</div><div class="info-value" id="obsTime">---</div></div>
+        <div class="info-item"><div class="info-label">貯水量（原値）</div><div class="info-value" id="rawStorage">--- ×10³m³</div></div>
+        <div class="info-item"><div class="info-label">ダム名</div><div class="info-value">${dam.name}</div></div>
+      </div>
+
+      <div class="chart-section">
+        <div class="chart-header">
+          <span class="chart-title">貯水率の推移</span>
+          <div class="range-row" id="rangeRow">
+            <button class="range-btn ${currentRange==='24h'?'active':''}" data-range="24h">24時間</button>
+            <button class="range-btn ${currentRange==='3d' ?'active':''}" data-range="3d" >3日間</button>
+            <button class="range-btn ${currentRange==='7d' ?'active':''}" data-range="7d" >7日間</button>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chartCanvas"></canvas>
+          <div class="chart-empty" id="chartEmpty">
+            <div class="chart-empty-icon">📊</div>
+            <div class="chart-empty-text">データ取得中…<br>しばらくお待ちください</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="footer">
+        <div class="last-update" id="lastUpdate">最終更新: ---</div>
+        <div class="auto-note">5分ごとに自動更新 &nbsp;|&nbsp; 次の更新まで <span class="countdown" id="countdown">300</span> 秒</div>
+      </div>
+    </div>
+  `;
+}
+function emptyHTML() {
+  return `<div class="empty-state"><div class="empty-icon">💧</div><h2>ダムを追加しよう</h2><p>右上の <strong>+</strong> ボタンからダムを検索して<br>お気に入りに追加できます</p></div>`;
+}
+
+/* ── タブ ── */
+function renderTabs() {
+  const scroll = document.getElementById('tabScroll'); scroll.innerHTML = '';
+  favorites.forEach((dam, i) => {
+    const btn = document.createElement('button'); btn.className = 'tab'+(i===activeIdx?' active':'');
+    const name = document.createElement('span'); name.textContent = dam.name; btn.appendChild(name);
+    if (favorites.length > 1) { const x = document.createElement('button'); x.className = 'tab-close'; x.textContent = '×'; x.addEventListener('click', e => { e.stopPropagation(); removeFavorite(i); renderAll(); startFetch(); }); btn.appendChild(x); }
+    btn.addEventListener('click', () => { if (i===activeIdx) return; activeIdx=i; renderAll(); startFetch(); });
+    scroll.appendChild(btn);
+  });
+  const active = scroll.children[activeIdx];
+  if (active) setTimeout(() => active.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' }), 50);
+}
+function renderAll() {
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+  renderTabs();
+  const mc = document.getElementById('mainContent');
+  if (!favorites.length) { mc.innerHTML = emptyHTML(); return; }
+  mc.innerHTML = cardHTML(favorites[activeIdx]);
+  document.getElementById('rangeRow')?.querySelectorAll('.range-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentRange = btn.dataset.range;
+      document.querySelectorAll('.range-btn').forEach(b => b.classList.toggle('active', b===btn));
+      renderChart(favorites[activeIdx].id);
+    });
+  });
+  renderChart(favorites[activeIdx].id);
+}
+
+/* ── iframeURLキャッシュ ── */
+const iframeUrlKey = id => `mzks_iurl_${id}`;
+function getCachedIframeSrc(id) { return localStorage.getItem(iframeUrlKey(id)); }
+function setCachedIframeSrc(id, url) { localStorage.setItem(iframeUrlKey(id), url); }
+
+/* ── データ取得 ── */
+let cdTimer = null, fetchToken = 0;
+async function fetchDamData() {
+  const dam = favorites[activeIdx]; if (!dam) return;
+  const token = ++fetchToken;
+
+  // キャッシュデータを即時表示
+  const cached = getHistory(dam.id);
+  if (cached.length) {
+    updateUI(cached[cached.length - 1]);
+    const rs = document.getElementById('rawStorage'); if (rs) rs.textContent = cached[cached.length-1].s.toLocaleString('ja-JP') + ' ×10³m³';
+    renderChart(dam.id);
+  }
+
+  setStatus('loading', 'データを取得中…');
+  document.getElementById('storageValue')?.classList.add('fading');
+  try {
+    // キャッシュ済みiframeURLがあれば並列フェッチ、なければ直列
+    const cachedSrc = getCachedIframeSrc(dam.id);
+    let iframeSrc, iframeHtml;
+    if (cachedSrc) {
+      const [mainHtml, cachedHtml] = await Promise.all([
+        proxyFetch(`${DAM_BASE}/cgi-bin/DspDamData.exe?ID=${dam.id}&KIND=3&PAGE=0`),
+        proxyFetch(cachedSrc),
+      ]);
+      if (token!==fetchToken) return;
+      iframeHtml = cachedHtml;
+      const freshSrc = extractIframeSrc(mainHtml);
+      if (freshSrc && freshSrc !== cachedSrc) {
+        setCachedIframeSrc(dam.id, freshSrc);
+        const freshHtml = await proxyFetch(freshSrc); if (token!==fetchToken) return;
+        iframeHtml = freshHtml;
+      }
+    } else {
+      const mainHtml = await proxyFetch(`${DAM_BASE}/cgi-bin/DspDamData.exe?ID=${dam.id}&KIND=3&PAGE=0`); if (token!==fetchToken) return;
+      iframeSrc = extractIframeSrc(mainHtml); if (!iframeSrc) throw new Error('IFRAMEのURLが見つかりませんでした');
+      setCachedIframeSrc(dam.id, iframeSrc);
+      iframeHtml = await proxyFetch(iframeSrc); if (token!==fetchToken) return;
+    }
+    const allPts = parseIframeAll(iframeHtml); if (!allPts.length) throw new Error('データを解析できませんでした');
+    mergeHistory(dam.id, allPts);
+    hideError(); updateUI(allPts[allPts.length-1]);
+    const rs = document.getElementById('rawStorage'); if (rs) rs.textContent = allPts[allPts.length-1].s.toLocaleString('ja-JP') + ' ×10³m³';
+    setStatus('', `取得完了（${allPts.length}件）`);
+    renderChart(dam.id);
+  } catch (e) {
+    if (token!==fetchToken) return;
+    setStatus('error', 'エラー: '+e.message); showError('データの取得に失敗しました。\n('+e.message+')');
+  } finally { if (token===fetchToken) document.getElementById('storageValue')?.classList.remove('fading'); }
+}
+function startFetch() { clearInterval(cdTimer); fetchDamData().then(startCountdown); }
+function startCountdown() {
+  let cd = INTERVAL; clearInterval(cdTimer);
+  const el = document.getElementById('countdown'); if (el) el.textContent = cd;
+  cdTimer = setInterval(() => { cd--; const e2 = document.getElementById('countdown'); if (e2) e2.textContent = cd; if (cd<=0) { clearInterval(cdTimer); fetchDamData().then(startCountdown); } }, 1000);
+}
+
+/* ── 検索モーダル ── */
+let allDams = [], listLoaded = false, listLoading = false;
+function openModal() { document.getElementById('searchModal').classList.add('open'); document.getElementById('searchInput').value = ''; document.getElementById('searchClear').classList.remove('visible'); if (!listLoaded&&!listLoading) loadDamList(); else if (listLoaded) renderResults(''); }
+function closeModal() { document.getElementById('searchModal').classList.remove('open'); }
+async function loadDamList() {
+  listLoading = true;
+  const status = document.getElementById('searchStatus'), scroll = document.getElementById('resultsScroll'), prog = document.getElementById('searchProgress');
+  status.style.display = 'block'; scroll.style.display = 'none'; prog.textContent = '';
+  try {
+    allDams = await fetchAllDams((loaded, total) => { prog.textContent = total>0 ? `${loaded} / ${total} 件取得中` : `${loaded} 件取得中`; });
+    listLoaded = true; listLoading = false; status.style.display = 'none'; scroll.style.display = 'block';
+    renderResults(document.getElementById('searchInput').value);
+  } catch (e) { listLoading = false; prog.textContent = 'ダム一覧の取得に失敗しました。IDで直接追加してください。'; }
+}
+function renderResults(query) {
+  const q = query.trim().toLowerCase(), favIds = new Set(favorites.map(f => f.id));
+  const results = q ? allDams.filter(d => d.name.toLowerCase().includes(q)||d.addr.toLowerCase().includes(q)||d.id.includes(q)) : allDams;
+  const list = document.getElementById('resultsList');
+  if (!results.length) { list.innerHTML = `<div class="no-results">「${q}」に一致するダムが見つかりません</div>`; return; }
+  list.innerHTML = '';
+  results.forEach(dam => {
+    const isAdded = favIds.has(dam.id);
+    const item = document.createElement('div'); item.className = 'result-item';
+    item.innerHTML = `<div class="result-info"><div class="result-name">${dam.name}</div>${dam.addr?`<div class="result-meta">${dam.addr}</div>`:''}</div><button class="result-add${isAdded?' added':''}" ${isAdded?'disabled':''}>${isAdded?'登録済':'追加'}</button>`;
+    if (!isAdded) item.querySelector('.result-add').addEventListener('click', () => { addFavorite(dam.id,dam.name); activeIdx=favorites.length-1; closeModal(); renderAll(); startFetch(); });
+    list.appendChild(item);
+  });
+}
+
+/* ── 起動 ── */
+document.addEventListener('DOMContentLoaded', () => {
+  loadFavorites(); renderAll(); startFetch();
+  document.getElementById('addBtn').addEventListener('click', openModal);
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  document.getElementById('searchModal').addEventListener('click', e => { if (e.target===document.getElementById('searchModal')) closeModal(); });
+  document.getElementById('searchInput').addEventListener('input', e => { const v=e.target.value; document.getElementById('searchClear').classList.toggle('visible',v.length>0); if (listLoaded) renderResults(v); });
+  document.getElementById('searchClear').addEventListener('click', () => { document.getElementById('searchInput').value=''; document.getElementById('searchClear').classList.remove('visible'); if (listLoaded) renderResults(''); document.getElementById('searchInput').focus(); });
+  document.getElementById('manualAdd').addEventListener('click', () => {
+    const id=document.getElementById('manualId').value.trim(), name=document.getElementById('manualName').value.trim()||`ダム(${id})`;
+    if (!id||!/^\d{10,}$/.test(id)) { alert('観測所IDを正しく入力してください（10桁以上の数字）'); return; }
+    if (!addFavorite(id,name)) { alert('既に登録されています'); return; }
+    activeIdx=favorites.length-1; closeModal(); renderAll(); startFetch();
+  });
+});
+</script>
+</body>
+</html>
