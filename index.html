@@ -320,12 +320,19 @@ function parseIframeAll(html) {
     }
     if (dataRows.length < 5) continue;
 
-    // ヘッダーから貯水率列を検出
+    // ヘッダーから貯水率列を検出（colspan対策：検出結果を検証する）
     let rateCol = -1;
     for (const hrow of table.querySelectorAll('tr')) {
       const ths = Array.from(hrow.querySelectorAll('th,td'));
       const idx = ths.findIndex(th => th.textContent.includes('貯水率'));
       if (idx >= 0) { rateCol = idx; break; }
+    }
+    // ヘッダー検出結果を検証：実際のデータ列が貯水率らしいか確認
+    if (rateCol >= 0) {
+      const check = dataRows.map(r => parseFloat(r.cells[rateCol]?.textContent)).filter(v => !isNaN(v) && v >= 0 && v <= 105);
+      const mean  = check.length ? check.reduce((a, b) => a + b, 0) / check.length : 0;
+      // 平均が5未満 or カバレッジが50%未満なら colspan ズレと判断して無効化
+      if (mean < 5 || check.length < dataRows.length * 0.5) rateCol = -1;
     }
 
     // ヘッダーで見つからない場合：複合スコアで貯水率列を検出
