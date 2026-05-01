@@ -373,8 +373,14 @@ function parseIframeAll(html) {
     }
     if (rateCol < 0) rateCol = 6;
 
-    // データ生成
+    // 選んだ列が本当に貯水率らしいか検証（平均値5%未満は流量等とみなし無効化）
+    const checkVals = dataRows.map(r => parseFloat(r.cells[rateCol]?.textContent)).filter(v => !isNaN(v) && v >= 0 && v <= 105);
+    const checkMean = checkVals.length ? checkVals.reduce((a, b) => a + b, 0) / checkVals.length : 0;
+    const validRate = checkMean >= 5; // 貯水率なら通常5%以上
+
+    // データ生成（列が無効なら r=null にしてスコアを下げる）
     const pts = dataRows.map(({ date, time, s, cells }) => {
+      if (!validRate) return { t: date + ' ' + time, s, r: null };
       const rRaw = cells[rateCol]?.textContent.trim() ?? '';
       const rNum = parseFloat(rRaw);
       return { t: date + ' ' + time, s, r: (!isNaN(rNum) && rNum >= 0 && rNum <= 105) ? rNum : null };
