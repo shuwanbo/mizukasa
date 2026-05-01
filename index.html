@@ -328,8 +328,11 @@ function parseIframeAll(html) {
       if (idx >= 0) { rateCol = idx; break; }
     }
 
-    // ヘッダーで見つからない場合：「滑らかさ」で貯水率列を検出
-    // 貯水率は10分で0.1%程度しか変化しない → 変化量が最小の列を選ぶ
+    // ヘッダーで見つからない場合：複合スコアで貯水率列を検出
+    // 条件①: 0〜105の範囲の値が70%以上
+    // 条件②: 平均値が5以上（降水量・ゼロ列を除外）
+    // 条件③: 値の幅が1以上（定数列を除外）
+    // スコア: カバレッジ率 ÷ (1 + 平均変化量) → 滑らかな列が高得点
     if (rateCol < 0) {
       let bestColScore = -1;
       const maxCol = Math.max(...dataRows.map(r => r.cells.length));
@@ -339,12 +342,12 @@ function parseIframeAll(html) {
           return (!isNaN(v) && v >= 0 && v <= 105) ? v : null;
         });
         const validVals = colVals.filter(v => v !== null);
-        // 70%以上の行で有効値が必要
         if (validVals.length < dataRows.length * 0.7) continue;
-        // 3種類以上の異なる値が必要（定数列を除外）
-        if (new Set(validVals.map(v => Math.round(v * 10))).size < 3) continue;
+        const mean = validVals.reduce((a, b) => a + b, 0) / validVals.length;
+        if (mean < 5) continue; // 降水量・ゼロ列を除外
+        const range = Math.max(...validVals) - Math.min(...validVals);
+        if (range < 1) continue; // 定数列を除外
         const ratio = validVals.length / dataRows.length;
-        // 連続する値の平均変化量を計算
         let totalChange = 0, changeCount = 0, prev = null;
         for (const v of colVals) {
           if (v !== null) {
@@ -353,7 +356,6 @@ function parseIframeAll(html) {
           }
         }
         const avgChange = changeCount > 0 ? totalChange / changeCount : 999;
-        // スコア：高カバレッジ + 小変化量 = 貯水率らしさ
         const score = ratio / (1 + avgChange);
         if (score > bestColScore) { bestColScore = score; rateCol = col; }
       }
